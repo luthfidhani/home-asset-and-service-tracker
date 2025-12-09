@@ -1,0 +1,110 @@
+---
+import type { User } from '@supabase/supabase-js';
+
+interface Props {
+  user: User | null;
+}
+
+const { user } = Astro.props;
+---
+
+<header class="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-surface-200">
+  <div class="flex items-center justify-between px-4 lg:px-8 py-4">
+    <!-- Mobile menu button -->
+    <button
+      id="menu-toggle"
+      class="lg:hidden p-2 -ml-2 rounded-lg hover:bg-surface-100 transition-colors"
+      aria-label="Toggle menu"
+    >
+      <svg class="w-6 h-6 text-surface-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+    </button>
+    
+    <!-- Page title placeholder (can be used for breadcrumbs) -->
+    <div class="hidden lg:block"></div>
+    
+    <!-- Right section -->
+    <div class="flex items-center gap-4">
+      <!-- User dropdown -->
+      <div class="relative" id="user-dropdown-container">
+        <button
+          id="user-dropdown-trigger"
+          class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-100 transition-colors"
+        >
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white text-sm font-medium">
+            {user?.email?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <span class="hidden sm:block text-sm font-medium text-surface-700">
+            {user?.email?.split('@')[0] || 'User'}
+          </span>
+          <svg class="w-4 h-4 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        
+        <!-- Dropdown menu -->
+        <div
+          id="user-dropdown-menu"
+          class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-surface-200 py-2 hidden animate-fade-in"
+        >
+          <div class="px-4 py-2 border-b border-surface-100">
+            <p class="text-sm font-medium text-surface-900">{user?.email?.split('@')[0]}</p>
+            <p class="text-xs text-surface-500 truncate">{user?.email}</p>
+          </div>
+          <a
+            href="/settings"
+            class="flex items-center gap-2 px-4 py-2 text-sm text-surface-700 hover:bg-surface-50 transition-colors"
+            data-astro-prefetch
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            Settings
+          </a>
+          <form action="/api/auth/logout" method="POST" data-astro-reload>
+            <button
+              type="submit"
+              class="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+              </svg>
+              Sign Out
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script>
+  function initDropdown() {
+    const trigger = document.getElementById('user-dropdown-trigger');
+    const menu = document.getElementById('user-dropdown-menu');
+    const container = document.getElementById('user-dropdown-container');
+    
+    // Close menu first
+    menu?.classList.add('hidden');
+    
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu?.classList.toggle('hidden');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!container?.contains(e.target as Node)) {
+        menu?.classList.add('hidden');
+      }
+    });
+  }
+  
+  // Initialize on first load
+  initDropdown();
+  
+  // Re-initialize after View Transitions
+  document.addEventListener('astro:after-swap', initDropdown);
+</script>

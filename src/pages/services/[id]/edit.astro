@@ -1,0 +1,130 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import PageHeader from '../../../components/ui/PageHeader.astro';
+import Card from '../../../components/ui/Card.astro';
+import Button from '../../../components/ui/Button.astro';
+import Input from '../../../components/ui/Input.astro';
+import Select from '../../../components/ui/Select.astro';
+import Textarea from '../../../components/ui/Textarea.astro';
+import Alert from '../../../components/ui/Alert.astro';
+import { supabase } from '../../../lib/supabase';
+import { SERVICE_STATUSES, formatDateForInput } from '../../../lib/utils';
+
+const { id } = Astro.params;
+const error = Astro.url.searchParams.get('error');
+
+const [{ data: service }, { data: assets }] = await Promise.all([
+  supabase.from('services').select('*, assets(name)').eq('id', id).single(),
+  supabase.from('assets').select('id, name').order('name'),
+]);
+
+if (!service) {
+  return Astro.redirect('/services?error=not_found');
+}
+
+const assetOptions = assets?.map(a => ({ value: a.id, label: a.name })) || [];
+const statusOptions = SERVICE_STATUSES.map(s => ({ value: s.value, label: s.label }));
+---
+
+<AppLayout title="Edit Service Record">
+  <PageHeader title="Edit Service Record" description={service.assets?.name || 'Unknown Asset'}>
+    <Button href="/services" variant="ghost" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Back to Services
+    </Button>
+  </PageHeader>
+  
+  {error && (
+    <Alert type="error" class="mb-6" dismissible>
+      {error === 'validation' ? 'Please fill in all required fields' : 'An error occurred. Please try again.'}
+    </Alert>
+  )}
+  
+  <Card>
+    <form action="/api/services/update" method="POST" class="space-y-6">
+      <input type="hidden" name="id" value={service.id} />
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Select
+          name="asset_id"
+          label="Asset"
+          options={assetOptions}
+          value={service.asset_id}
+          required
+        />
+        
+        <Input
+          type="date"
+          name="service_date"
+          label="Service Date"
+          value={formatDateForInput(service.service_date)}
+          required
+        />
+        
+        <Input
+          name="service_place"
+          label="Service Place"
+          placeholder="e.g., Apple Store, Local Repair Shop"
+          value={service.service_place || ''}
+        />
+        
+        <Input
+          type="number"
+          name="cost"
+          label="Cost"
+          placeholder="0.00"
+          value={service.cost || ''}
+          min="0"
+          step="0.01"
+        />
+        
+        <Select
+          name="status"
+          label="Status"
+          options={statusOptions}
+          value={service.status}
+        />
+      </div>
+      
+      <Textarea
+        name="problem_description"
+        label="Problem Description"
+        placeholder="Describe the problem or issue..."
+        value={service.problem_description || ''}
+        rows={3}
+      />
+      
+      <Textarea
+        name="repair_action"
+        label="Repair Action"
+        placeholder="Describe what was done to fix the problem..."
+        value={service.repair_action || ''}
+        rows={3}
+      />
+      
+      <div class="flex items-center justify-between pt-4 border-t border-surface-200">
+        <form action="/api/services/delete" method="POST" onsubmit="return confirm('Delete this service record?')">
+          <input type="hidden" name="id" value={service.id} />
+          <Button type="submit" variant="danger">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Delete
+          </Button>
+        </form>
+        <div class="flex items-center gap-4">
+          <Button href="/services" variant="ghost">Cancel</Button>
+          <Button type="submit">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Save Changes
+          </Button>
+        </div>
+      </div>
+    </form>
+  </Card>
+</AppLayout>
+

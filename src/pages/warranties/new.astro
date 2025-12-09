@@ -1,0 +1,118 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import PageHeader from '../../components/ui/PageHeader.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
+import Select from '../../components/ui/Select.astro';
+import Textarea from '../../components/ui/Textarea.astro';
+import Alert from '../../components/ui/Alert.astro';
+import { supabase } from '../../lib/supabase';
+import { formatDateForInput } from '../../lib/utils';
+
+const error = Astro.url.searchParams.get('error');
+const preselectedAssetId = Astro.url.searchParams.get('asset_id') || '';
+
+// Fetch assets that don't have warranties yet
+const { data: assetsWithWarranties } = await supabase.from('warranties').select('asset_id');
+const warrantyAssetIds = assetsWithWarranties?.map(w => w.asset_id) || [];
+
+let assetsQuery = supabase.from('assets').select('id, name').order('name');
+if (warrantyAssetIds.length > 0 && !preselectedAssetId) {
+  // Exclude assets that already have warranties, unless we're adding from asset detail
+  assetsQuery = assetsQuery.not('id', 'in', `(${warrantyAssetIds.join(',')})`);
+}
+
+const { data: assets } = await assetsQuery;
+
+const assetOptions = assets?.map(a => ({ value: a.id, label: a.name })) || [];
+const today = formatDateForInput(new Date());
+---
+
+<AppLayout title="Add Warranty">
+  <PageHeader title="Add Warranty" description="Register warranty for an asset">
+    <Button href="/warranties" variant="ghost" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Back to Warranties
+    </Button>
+  </PageHeader>
+  
+  {error && (
+    <Alert type="error" class="mb-6" dismissible>
+      {error === 'validation' ? 'Please fill in all required fields' : 
+       error === 'duplicate' ? 'This asset already has a warranty registered' : 
+       'An error occurred. Please try again.'}
+    </Alert>
+  )}
+  
+  {assetOptions.length === 0 && !preselectedAssetId ? (
+    <Card>
+      <div class="text-center py-8">
+        <svg class="w-16 h-16 mx-auto text-surface-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+        </svg>
+        <h3 class="text-lg font-semibold text-surface-900">All assets have warranties</h3>
+        <p class="text-surface-500 mt-1">Every asset already has a warranty registered.</p>
+        <div class="mt-4">
+          <Button href="/assets/new" variant="secondary">Add New Asset</Button>
+        </div>
+      </div>
+    </Card>
+  ) : (
+    <Card>
+      <form action="/api/warranties/create" method="POST" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Select
+            name="asset_id"
+            label="Asset"
+            options={assetOptions}
+            value={preselectedAssetId}
+            placeholder="Select an asset"
+            required
+          />
+          
+          <Input
+            name="provider"
+            label="Warranty Provider"
+            placeholder="e.g., Apple, Best Buy, Manufacturer"
+          />
+          
+          <Input
+            type="date"
+            name="warranty_start"
+            label="Warranty Start Date"
+            value={today}
+            required
+          />
+          
+          <Input
+            type="date"
+            name="warranty_end"
+            label="Warranty End Date"
+            required
+          />
+        </div>
+        
+        <Textarea
+          name="notes"
+          label="Notes"
+          placeholder="Additional warranty details, terms, or conditions..."
+          rows={3}
+        />
+        
+        <div class="flex items-center justify-end gap-4 pt-4 border-t border-surface-200">
+          <Button href="/warranties" variant="ghost">Cancel</Button>
+          <Button type="submit">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Add Warranty
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )}
+</AppLayout>
+

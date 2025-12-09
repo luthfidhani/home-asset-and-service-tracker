@@ -1,0 +1,289 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import PageHeader from '../../../components/ui/PageHeader.astro';
+import Card from '../../../components/ui/Card.astro';
+import Button from '../../../components/ui/Button.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Table from '../../../components/ui/Table.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { supabase } from '../../../lib/supabase';
+import { formatCurrency, formatDate, getStatusColor, getConditionColor, getWarrantyStatus, getServiceStatusColor } from '../../../lib/utils';
+
+const { id } = Astro.params;
+
+// Fetch asset with all related data
+const [
+  { data: asset, error: assetError },
+  { data: warranty },
+  { data: services },
+  { data: sale },
+  { data: images },
+] = await Promise.all([
+  supabase.from('assets').select('*').eq('id', id).single(),
+  supabase.from('warranties').select('*').eq('asset_id', id).single(),
+  supabase.from('services').select('*').eq('asset_id', id).order('service_date', { ascending: false }),
+  supabase.from('asset_sales').select('*').eq('asset_id', id).single(),
+  supabase.from('asset_images').select('*').eq('asset_id', id).order('created_at', { ascending: false }),
+]);
+
+if (assetError || !asset) {
+  return Astro.redirect('/assets?error=not_found');
+}
+
+const warrantyStatus = warranty ? getWarrantyStatus(warranty.warranty_end) : null;
+---
+
+<AppLayout title={asset.name}>
+  <PageHeader title={asset.name} description={`${asset.category} • ${asset.brand || ''} ${asset.model || ''}`}>
+    <div slot="actions" class="flex items-center gap-2">
+      <Button href={`/assets/${id}/edit`} variant="secondary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+        </svg>
+        Edit
+      </Button>
+      <Button href="/assets" variant="ghost">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Back
+      </Button>
+    </div>
+  </PageHeader>
+  
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Main Info -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Asset Details -->
+      <Card>
+        <h2 class="text-lg font-semibold text-surface-900 mb-4">Asset Details</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <p class="text-sm text-surface-500">Category</p>
+            <p class="font-medium">{asset.category}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Brand</p>
+            <p class="font-medium">{asset.brand || '-'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Model</p>
+            <p class="font-medium">{asset.model || '-'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Serial Number</p>
+            <p class="font-medium font-mono text-sm">{asset.serial_number || '-'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Location</p>
+            <p class="font-medium">{asset.location || '-'}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Purchase Date</p>
+            <p class="font-medium">{formatDate(asset.purchase_date)}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Purchase Price</p>
+            <p class="font-medium text-lg">{formatCurrency(asset.purchase_price)}</p>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Condition</p>
+            <Badge class={getConditionColor(asset.condition)}>{asset.condition}</Badge>
+          </div>
+          <div>
+            <p class="text-sm text-surface-500">Status</p>
+            <Badge class={getStatusColor(asset.status)}>{asset.status}</Badge>
+          </div>
+        </div>
+        {asset.notes && (
+          <div class="mt-4 pt-4 border-t border-surface-200">
+            <p class="text-sm text-surface-500">Notes</p>
+            <p class="mt-1 text-surface-700 whitespace-pre-wrap">{asset.notes}</p>
+          </div>
+        )}
+      </Card>
+      
+      <!-- Service History -->
+      <Card padding="none">
+        <div class="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+          <h2 class="font-semibold text-surface-900">Service History</h2>
+          <Button href={`/services/new?asset_id=${id}`} size="sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Add Service
+          </Button>
+        </div>
+        {services && services.length > 0 ? (
+          <Table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Problem</th>
+                <th>Service Place</th>
+                <th>Cost</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map((service) => (
+                <tr>
+                  <td>{formatDate(service.service_date)}</td>
+                  <td class="max-w-xs truncate">{service.problem_description || '-'}</td>
+                  <td>{service.service_place || '-'}</td>
+                  <td>{formatCurrency(service.cost)}</td>
+                  <td>
+                    <Badge class={getServiceStatusColor(service.status)}>{service.status}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        ) : (
+          <div class="p-6">
+            <EmptyState
+              title="No service records"
+              description="Add a service record when this asset needs repair"
+              icon="services"
+            />
+          </div>
+        )}
+      </Card>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="space-y-6">
+      <!-- Images Gallery -->
+      <Card>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-surface-900">Images</h2>
+          <Button href={`/assets/${id}/images`} size="sm" variant="ghost">
+            Manage
+          </Button>
+        </div>
+        {images && images.length > 0 ? (
+          <div class="grid grid-cols-2 gap-2">
+            {images.slice(0, 4).map((image) => (
+              <img
+                src={image.image_url}
+                alt={asset.name}
+                class="w-full h-24 object-cover rounded-lg border border-surface-200"
+              />
+            ))}
+          </div>
+        ) : (
+          <div class="text-center py-6 text-surface-500">
+            <svg class="w-12 h-12 mx-auto text-surface-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p class="text-sm">No images</p>
+          </div>
+        )}
+      </Card>
+      
+      <!-- Warranty Status -->
+      <Card>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-surface-900">Warranty</h2>
+          {!warranty && (
+            <Button href={`/warranties/new?asset_id=${id}`} size="sm" variant="ghost">
+              Add
+            </Button>
+          )}
+        </div>
+        {warranty ? (
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Status</span>
+              <Badge class={warrantyStatus?.class}>{warrantyStatus?.label}</Badge>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Start</span>
+              <span class="font-medium">{formatDate(warranty.warranty_start)}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">End</span>
+              <span class="font-medium">{formatDate(warranty.warranty_end)}</span>
+            </div>
+            {warranty.provider && (
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-surface-500">Provider</span>
+                <span class="font-medium">{warranty.provider}</span>
+              </div>
+            )}
+            <div class="pt-3 border-t border-surface-200">
+              <Button href={`/warranties/${warranty.id}/edit`} size="sm" variant="secondary" class="w-full">
+                Edit Warranty
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div class="text-center py-4 text-surface-500">
+            <p class="text-sm">No warranty registered</p>
+          </div>
+        )}
+      </Card>
+      
+      <!-- Sale Info (if sold) -->
+      {sale && (
+        <Card>
+          <h2 class="font-semibold text-surface-900 mb-4">Sale Information</h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Sold Date</span>
+              <span class="font-medium">{formatDate(sale.sold_date)}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Sold Price</span>
+              <span class="font-medium">{formatCurrency(sale.sold_price)}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Buyer</span>
+              <span class="font-medium">{sale.buyer_name || '-'}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-surface-500">Profit/Loss</span>
+              <span class:list={[
+                'font-medium',
+                (sale.profit_loss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              ]}>
+                {formatCurrency(sale.profit_loss || 0)}
+              </span>
+            </div>
+          </div>
+        </Card>
+      )}
+      
+      <!-- Quick Actions -->
+      {asset.status === 'active' && !sale && (
+        <Card>
+          <h2 class="font-semibold text-surface-900 mb-4">Quick Actions</h2>
+          <div class="space-y-2">
+            <Button href={`/services/new?asset_id=${id}`} variant="secondary" class="w-full justify-start">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              Add Service Record
+            </Button>
+            {!warranty && (
+              <Button href={`/warranties/new?asset_id=${id}`} variant="secondary" class="w-full justify-start">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+                Add Warranty
+              </Button>
+            )}
+            <Button href={`/sales/new?asset_id=${id}`} variant="secondary" class="w-full justify-start">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              Record Sale
+            </Button>
+          </div>
+        </Card>
+      )}
+    </div>
+  </div>
+</AppLayout>
+

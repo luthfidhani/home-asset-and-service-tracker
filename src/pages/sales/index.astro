@@ -1,0 +1,138 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import PageHeader from '../../components/ui/PageHeader.astro';
+import Button from '../../components/ui/Button.astro';
+import Card from '../../components/ui/Card.astro';
+import Table from '../../components/ui/Table.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import StatCard from '../../components/ui/StatCard.astro';
+import { supabase } from '../../lib/supabase';
+import { formatCurrency, formatDate } from '../../lib/utils';
+
+// Fetch sales with asset info
+const { data: sales } = await supabase
+  .from('asset_sales')
+  .select('*, assets(id, name, category, purchase_price)')
+  .order('sold_date', { ascending: false });
+
+// Calculate stats
+const totalSales = sales?.reduce((sum, s) => sum + (s.sold_price || 0), 0) || 0;
+const totalProfit = sales?.reduce((sum, s) => sum + (s.profit_loss || 0), 0) || 0;
+const salesCount = sales?.length || 0;
+---
+
+<AppLayout title="Sales History">
+  <PageHeader title="Sales History" description="Track sold assets and profit/loss">
+    <Button href="/sales/new" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+      </svg>
+      Record Sale
+    </Button>
+  </PageHeader>
+  
+  <!-- Stats -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <StatCard
+      title="Total Sales"
+      value={formatCurrency(totalSales)}
+      icon="currency"
+      color="green"
+    />
+    <StatCard
+      title="Total Profit/Loss"
+      value={formatCurrency(totalProfit)}
+      icon="currency"
+      color={totalProfit >= 0 ? 'green' : 'red'}
+    />
+    <StatCard
+      title="Items Sold"
+      value={salesCount}
+      icon="inventory"
+      color="blue"
+    />
+  </div>
+  
+  <!-- Sales Table -->
+  {sales && sales.length > 0 ? (
+    <Card padding="none">
+      <Table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th class="hidden sm:table-cell">Category</th>
+            <th>Sold Date</th>
+            <th class="hidden md:table-cell">Purchase Price</th>
+            <th>Sold Price</th>
+            <th>Profit/Loss</th>
+            <th class="hidden lg:table-cell">Buyer</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sales.map((sale) => (
+            <tr>
+              <td>
+                <a href={`/assets/${sale.asset_id}`} class="font-medium text-primary-600 hover:text-primary-700" data-astro-prefetch>
+                  {sale.assets?.name || 'Unknown'}
+                </a>
+              </td>
+              <td class="hidden sm:table-cell">{sale.assets?.category || '-'}</td>
+              <td>{formatDate(sale.sold_date)}</td>
+              <td class="hidden md:table-cell">{formatCurrency(sale.assets?.purchase_price || 0)}</td>
+              <td class="font-medium">{formatCurrency(sale.sold_price)}</td>
+              <td>
+                <span class:list={[
+                  'font-medium',
+                  (sale.profit_loss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                ]}>
+                  {(sale.profit_loss || 0) >= 0 ? '+' : ''}{formatCurrency(sale.profit_loss || 0)}
+                </span>
+              </td>
+              <td class="hidden lg:table-cell">{sale.buyer_name || '-'}</td>
+              <td class="text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <a
+                    href={`/sales/${sale.id}/edit`}
+                    class="p-2 text-surface-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit"
+                    data-astro-prefetch
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                  </a>
+                  <form action="/api/sales/delete" method="POST" class="inline" onsubmit="return confirm('Delete this sale record? The asset status will be reverted to active.')">
+                    <input type="hidden" name="id" value={sale.id} />
+                    <input type="hidden" name="asset_id" value={sale.asset_id} />
+                    <button
+                      type="submit"
+                      class="p-2 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
+  ) : (
+    <Card>
+      <EmptyState
+        title="No sales recorded"
+        description="Record a sale when you sell an asset"
+        icon="sales"
+      >
+        <Button href="/sales/new">Record Sale</Button>
+      </EmptyState>
+    </Card>
+  )}
+</AppLayout>
+

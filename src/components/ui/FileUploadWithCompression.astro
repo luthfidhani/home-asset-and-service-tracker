@@ -1,0 +1,400 @@
+---
+interface Props {
+  name: string;
+  id?: string;
+  label?: string;
+  accept?: string;
+  multiple?: boolean;
+  required?: boolean;
+  class?: string;
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+}
+
+const {
+  name,
+  id = name,
+  label,
+  accept = 'image/*',
+  multiple = false,
+  required = false,
+  class: className = '',
+  maxWidth = 1920,
+  maxHeight = 1920,
+  quality = 0.85,
+} = Astro.props;
+---
+
+<div class={`space-y-1.5 ${className}`} data-file-upload>
+  {label && (
+    <label for={id} class="block text-sm font-medium text-surface-700">
+      {label}
+      {required && <span class="text-red-500 ml-0.5">*</span>}
+    </label>
+  )}
+  <div class="relative">
+    <!-- Hidden input for compressed files -->
+    <input
+      type="file"
+      name={`${name}_original`}
+      id={`${id}_original`}
+      accept={accept}
+      multiple={multiple}
+      class="hidden"
+      data-original-input
+    />
+    
+    <!-- Drop zone -->
+    <label
+      for={`${id}_original`}
+      class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-surface-300 rounded-lg cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-colors duration-200"
+      data-dropzone
+    >
+      <div class="flex flex-col items-center justify-center pt-5 pb-6" data-upload-content>
+        <svg class="w-8 h-8 text-surface-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+        </svg>
+        <p class="text-sm text-surface-600">
+          <span class="font-medium text-primary-600">Click to upload</span> or drag and drop
+        </p>
+        <p class="text-xs text-surface-400 mt-1">PNG, JPG, WebP up to 10MB (auto-compressed)</p>
+      </div>
+      
+      <!-- Loading state -->
+      <div class="hidden flex-col items-center justify-center pt-5 pb-6" data-loading-content>
+        <svg class="w-8 h-8 text-primary-500 mb-2 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-sm text-surface-600">Compressing images...</p>
+      </div>
+    </label>
+    
+    <!-- Preview and compression stats -->
+    <div id={`${id}-preview`} class="mt-3 hidden" data-preview-container>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3" data-preview-grid></div>
+      <div class="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 hidden" data-compression-stats>
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span data-stats-text></span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Hidden container for compressed file inputs -->
+    <div data-compressed-inputs class="hidden"></div>
+  </div>
+</div>
+
+<script define:vars={{ id, name, maxWidth, maxHeight, quality }}>
+  // Image compression functions (inline to avoid module issues)
+  const defaultOptions = {
+    maxWidth: maxWidth,
+    maxHeight: maxHeight,
+    quality: quality,
+    outputType: 'webp',
+  };
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function calculateDimensions(width, height, maxW, maxH) {
+    if (width <= maxW && height <= maxH) {
+      return { width, height };
+    }
+
+    const aspectRatio = width / height;
+
+    if (width > height) {
+      const newWidth = Math.min(width, maxW);
+      const newHeight = Math.round(newWidth / aspectRatio);
+      
+      if (newHeight > maxH) {
+        return {
+          width: Math.round(maxH * aspectRatio),
+          height: maxH,
+        };
+      }
+      return { width: newWidth, height: newHeight };
+    } else {
+      const newHeight = Math.min(height, maxH);
+      const newWidth = Math.round(newHeight * aspectRatio);
+      
+      if (newWidth > maxW) {
+        return {
+          width: maxW,
+          height: Math.round(maxW / aspectRatio),
+        };
+      }
+      return { width: newWidth, height: newHeight };
+    }
+  }
+
+  async function compressImage(file, opts = {}) {
+    const options = { ...defaultOptions, ...opts };
+    
+    // Skip compression for small files (< 50KB) or non-image files
+    if (file.size < 50 * 1024 || !file.type.startsWith('image/')) {
+      return {
+        blob: file,
+        width: 0,
+        height: 0,
+        originalSize: file.size,
+        compressedSize: file.size,
+        compressionRatio: 1,
+      };
+    }
+
+    const img = await loadImage(file);
+    const { width, height } = calculateDimensions(
+      img.width,
+      img.height,
+      options.maxWidth,
+      options.maxHeight
+    );
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Could not get canvas context');
+    }
+
+    // High quality settings for text readability
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(img, 0, 0, width, height);
+    URL.revokeObjectURL(img.src);
+
+    const mimeType = options.outputType === 'webp' ? 'image/webp' : 'image/jpeg';
+    
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Failed to compress image'));
+        },
+        mimeType,
+        options.quality
+      );
+    });
+
+    // If compressed is larger than original, return original
+    if (blob.size >= file.size) {
+      return {
+        blob: file,
+        width: img.width,
+        height: img.height,
+        originalSize: file.size,
+        compressedSize: file.size,
+        compressionRatio: 1,
+      };
+    }
+
+    return {
+      blob,
+      width,
+      height,
+      originalSize: file.size,
+      compressedSize: blob.size,
+      compressionRatio: file.size / blob.size,
+    };
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  // Main logic
+  const container = document.querySelector(`[data-file-upload]:has(#${id}_original)`);
+  if (!container) return;
+
+  const originalInput = container.querySelector('[data-original-input]');
+  const dropzone = container.querySelector('[data-dropzone]');
+  const uploadContent = container.querySelector('[data-upload-content]');
+  const loadingContent = container.querySelector('[data-loading-content]');
+  const previewContainer = container.querySelector('[data-preview-container]');
+  const previewGrid = container.querySelector('[data-preview-grid]');
+  const compressionStats = container.querySelector('[data-compression-stats]');
+  const statsText = container.querySelector('[data-stats-text]');
+  const compressedInputsContainer = container.querySelector('[data-compressed-inputs]');
+
+  let compressedFiles = [];
+  let dataTransfer = new DataTransfer();
+
+  async function handleFiles(files) {
+    if (!files || files.length === 0) return;
+
+    // Show loading state
+    uploadContent?.classList.add('hidden');
+    loadingContent?.classList.remove('hidden');
+    loadingContent?.classList.add('flex');
+
+    compressedFiles = [];
+    dataTransfer = new DataTransfer();
+    
+    let totalOriginal = 0;
+    let totalCompressed = 0;
+
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+
+        const result = await compressImage(file);
+        
+        totalOriginal += result.originalSize;
+        totalCompressed += result.compressedSize;
+
+        // Create new file from blob
+        const extension = '.webp';
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        const newFileName = `${baseName}${extension}`;
+        
+        const compressedFile = new File([result.blob], newFileName, {
+          type: 'image/webp',
+        });
+
+        compressedFiles.push({
+          file: compressedFile,
+          preview: URL.createObjectURL(result.blob),
+          originalSize: result.originalSize,
+          compressedSize: result.compressedSize,
+        });
+
+        dataTransfer.items.add(compressedFile);
+      }
+
+      // Update preview
+      if (previewGrid) {
+        previewGrid.innerHTML = '';
+        
+        compressedFiles.forEach((item, index) => {
+          const div = document.createElement('div');
+          div.className = 'relative group';
+          div.innerHTML = `
+            <img src="${item.preview}" class="w-full h-24 object-cover rounded-lg border border-surface-200" />
+            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 rounded-b-lg">
+              ${formatFileSize(item.compressedSize)}
+            </div>
+            <button type="button" data-remove="${index}" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">×</button>
+          `;
+          previewGrid.appendChild(div);
+        });
+
+        // Add remove handlers
+        previewGrid.querySelectorAll('[data-remove]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const index = parseInt(btn.getAttribute('data-remove'));
+            removeFile(index);
+          });
+        });
+      }
+
+      // Show compression stats
+      if (totalOriginal > 0 && statsText && compressionStats) {
+        const saved = totalOriginal - totalCompressed;
+        const percentage = Math.round((saved / totalOriginal) * 100);
+        
+        if (saved > 0) {
+          statsText.textContent = `Compressed: ${formatFileSize(totalOriginal)} → ${formatFileSize(totalCompressed)} (saved ${percentage}%)`;
+          compressionStats.classList.remove('hidden');
+        } else {
+          compressionStats.classList.add('hidden');
+        }
+      }
+
+      previewContainer?.classList.remove('hidden');
+
+      // Create hidden file inputs for form submission
+      updateHiddenInputs();
+
+    } catch (error) {
+      console.error('Compression error:', error);
+    } finally {
+      // Hide loading state
+      uploadContent?.classList.remove('hidden');
+      loadingContent?.classList.add('hidden');
+      loadingContent?.classList.remove('flex');
+    }
+  }
+
+  function removeFile(index) {
+    // Clean up preview URL
+    if (compressedFiles[index]?.preview) {
+      URL.revokeObjectURL(compressedFiles[index].preview);
+    }
+    
+    compressedFiles.splice(index, 1);
+    
+    // Rebuild DataTransfer
+    dataTransfer = new DataTransfer();
+    compressedFiles.forEach(item => {
+      dataTransfer.items.add(item.file);
+    });
+
+    // Update preview
+    if (compressedFiles.length === 0) {
+      previewContainer?.classList.add('hidden');
+      compressionStats?.classList.add('hidden');
+    } else {
+      // Re-render preview
+      handleFiles(compressedFiles.map(f => f.file));
+    }
+
+    updateHiddenInputs();
+  }
+
+  function updateHiddenInputs() {
+    if (!compressedInputsContainer) return;
+    
+    compressedInputsContainer.innerHTML = '';
+    
+    // Create a single file input with all compressed files
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.name = name;
+    input.multiple = true;
+    input.files = dataTransfer.files;
+    input.style.display = 'none';
+    
+    compressedInputsContainer.appendChild(input);
+  }
+
+  // Event listeners
+  originalInput?.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+  });
+
+  // Drag and drop
+  dropzone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('border-primary-500', 'bg-primary-50');
+  });
+
+  dropzone?.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('border-primary-500', 'bg-primary-50');
+  });
+
+  dropzone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('border-primary-500', 'bg-primary-50');
+    handleFiles(e.dataTransfer?.files);
+  });
+</script>
+

@@ -1,0 +1,54 @@
+---
+interface Props {
+  name: string;
+  id?: string;
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  required?: boolean;
+  disabled?: boolean;
+  rows?: number;
+  error?: string;
+  class?: string;
+}
+
+const {
+  name,
+  id = name,
+  label,
+  placeholder,
+  value = '',
+  required = false,
+  disabled = false,
+  rows = 4,
+  error,
+  class: className = '',
+} = Astro.props;
+---
+
+<div class={`space-y-1.5 ${className}`}>
+  {label && (
+    <label for={id} class="block text-sm font-medium text-surface-700">
+      {label}
+      {required && <span class="text-red-500 ml-0.5">*</span>}
+    </label>
+  )}
+  <textarea
+    name={name}
+    id={id}
+    placeholder={placeholder}
+    required={required}
+    disabled={disabled}
+    rows={rows}
+    class:list={[
+      'w-full px-4 py-2.5 rounded-lg border bg-white text-surface-900 placeholder-surface-400 transition-colors duration-200 resize-y',
+      'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+      'disabled:bg-surface-100 disabled:cursor-not-allowed',
+      error ? 'border-red-500' : 'border-surface-300 hover:border-surface-400',
+    ]}
+  >{value}</textarea>
+  {error && (
+    <p class="text-sm text-red-600">{error}</p>
+  )}
+</div>
+

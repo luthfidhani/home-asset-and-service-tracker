@@ -1,0 +1,93 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+const { id, title, size = 'md' } = Astro.props;
+
+const sizeClasses = {
+  sm: 'max-w-sm',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+};
+---
+
+<div
+  id={id}
+  class="fixed inset-0 z-50 hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby={`${id}-title`}
+>
+  <!-- Backdrop -->
+  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" data-modal-backdrop></div>
+  
+  <!-- Modal container -->
+  <div class="fixed inset-0 overflow-y-auto">
+    <div class="flex min-h-full items-center justify-center p-4">
+      <div class:list={[
+        'relative w-full bg-white rounded-2xl shadow-xl animate-slide-up',
+        sizeClasses[size],
+      ]}>
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-surface-200">
+          <h2 id={`${id}-title`} class="text-lg font-semibold text-surface-900">
+            {title}
+          </h2>
+          <button
+            type="button"
+            class="p-2 -mr-2 text-surface-400 hover:text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
+            data-modal-close
+            aria-label="Close modal"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Content -->
+        <div class="px-6 py-4">
+          <slot />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script define:vars={{ id }}>
+  const modal = document.getElementById(id);
+  const backdrop = modal?.querySelector('[data-modal-backdrop]');
+  const closeBtn = modal?.querySelector('[data-modal-close]');
+  
+  function openModal() {
+    modal?.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  
+  function closeModal() {
+    modal?.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+  
+  // Close on backdrop click
+  backdrop?.addEventListener('click', closeModal);
+  
+  // Close on close button click
+  closeBtn?.addEventListener('click', closeModal);
+  
+  // Close on escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal?.classList.contains('hidden')) {
+      closeModal();
+    }
+  });
+  
+  // Expose functions globally for this modal
+  window[`openModal_${id}`] = openModal;
+  window[`closeModal_${id}`] = closeModal;
+</script>
+

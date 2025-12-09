@@ -1,0 +1,118 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import PageHeader from '../../components/ui/PageHeader.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
+import Select from '../../components/ui/Select.astro';
+import Textarea from '../../components/ui/Textarea.astro';
+import FileUploadWithCompression from '../../components/ui/FileUploadWithCompression.astro';
+import Alert from '../../components/ui/Alert.astro';
+import { supabase } from '../../lib/supabase';
+import { SERVICE_STATUSES, formatDateForInput } from '../../lib/utils';
+
+const error = Astro.url.searchParams.get('error');
+const preselectedAssetId = Astro.url.searchParams.get('asset_id') || '';
+
+// Fetch assets for dropdown
+const { data: assets } = await supabase.from('assets').select('id, name').eq('status', 'active').order('name');
+
+const assetOptions = assets?.map(a => ({ value: a.id, label: a.name })) || [];
+const statusOptions = SERVICE_STATUSES.map(s => ({ value: s.value, label: s.label }));
+const today = formatDateForInput(new Date());
+---
+
+<AppLayout title="Add Service Record">
+  <PageHeader title="Add Service Record" description="Record a new service or repair">
+    <Button href="/services" variant="ghost" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Back to Services
+    </Button>
+  </PageHeader>
+  
+  {error && (
+    <Alert type="error" class="mb-6" dismissible>
+      {error === 'validation' ? 'Please fill in all required fields' : 'An error occurred. Please try again.'}
+    </Alert>
+  )}
+  
+  <Card>
+    <form action="/api/services/create" method="POST" enctype="multipart/form-data" class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Select
+          name="asset_id"
+          label="Asset"
+          options={assetOptions}
+          value={preselectedAssetId}
+          placeholder="Select an asset"
+          required
+        />
+        
+        <Input
+          type="date"
+          name="service_date"
+          label="Service Date"
+          value={today}
+          required
+        />
+        
+        <Input
+          name="service_place"
+          label="Service Place"
+          placeholder="e.g., Apple Store, Local Repair Shop"
+        />
+        
+        <Input
+          type="number"
+          name="cost"
+          label="Cost (Rp)"
+          placeholder="0"
+          min="0"
+          step="1"
+        />
+        
+        <Select
+          name="status"
+          label="Status"
+          options={statusOptions}
+          value="completed"
+        />
+      </div>
+      
+      <Textarea
+        name="problem_description"
+        label="Problem Description"
+        placeholder="Describe the problem or issue..."
+        rows={3}
+      />
+      
+      <Textarea
+        name="repair_action"
+        label="Repair Action"
+        placeholder="Describe what was done to fix the problem..."
+        rows={3}
+      />
+      
+      <FileUploadWithCompression
+        name="receipt"
+        label="Service Receipt (optional, auto-compressed)"
+        accept="image/*"
+        maxWidth={1920}
+        maxHeight={1920}
+        quality={0.85}
+      />
+      
+      <div class="flex items-center justify-end gap-4 pt-4 border-t border-surface-200">
+        <Button href="/services" variant="ghost">Cancel</Button>
+        <Button type="submit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Create Service Record
+        </Button>
+      </div>
+    </form>
+  </Card>
+</AppLayout>

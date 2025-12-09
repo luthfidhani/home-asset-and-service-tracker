@@ -1,0 +1,89 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import Sidebar from "../components/Sidebar.astro";
+import Navbar from "../components/Navbar.astro";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const user = Astro.locals.user;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="flex min-h-screen">
+    <!-- Sidebar - persist across navigations -->
+    <Sidebar transition:persist />
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col lg:ml-64">
+      <!-- Navbar - persist across navigations -->
+      <Navbar user={user} transition:persist />
+
+      <!-- Page Content with transition animation -->
+      <main class="flex-1 p-4 lg:p-8" transition:animate="slide">
+        <div class="max-w-7xl mx-auto">
+          <slot />
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Mobile sidebar overlay -->
+  <div
+    id="sidebar-overlay"
+    class="fixed inset-0 bg-black/50 z-30 lg:hidden hidden"
+    transition:persist
+  >
+  </div>
+
+  <script>
+    // Re-initialize on every page navigation (View Transitions)
+    function initSidebar() {
+      const menuToggle = document.getElementById("menu-toggle");
+      const sidebar = document.getElementById("sidebar");
+      const overlay = document.getElementById("sidebar-overlay");
+
+      function toggleSidebar() {
+        sidebar?.classList.toggle("-translate-x-full");
+        overlay?.classList.toggle("hidden");
+        document.body.classList.toggle("overflow-hidden");
+      }
+
+      // Remove existing listeners to prevent duplicates
+      const newMenuToggle = menuToggle?.cloneNode(true);
+      const newOverlay = overlay?.cloneNode(true);
+
+      if (menuToggle && newMenuToggle) {
+        menuToggle.parentNode?.replaceChild(newMenuToggle, menuToggle);
+        newMenuToggle.addEventListener("click", toggleSidebar);
+      }
+
+      if (overlay && newOverlay) {
+        overlay.parentNode?.replaceChild(newOverlay, overlay);
+        (newOverlay as HTMLElement).addEventListener("click", toggleSidebar);
+      }
+
+      // Close sidebar on navigation (for mobile)
+      const sidebarLinks = sidebar?.querySelectorAll("a");
+      sidebarLinks?.forEach((link) => {
+        link.addEventListener("click", () => {
+          if (window.innerWidth < 1024) {
+            // Close sidebar before navigation
+            sidebar?.classList.add("-translate-x-full");
+            document.getElementById("sidebar-overlay")?.classList.add("hidden");
+            document.body.classList.remove("overflow-hidden");
+          }
+        });
+      });
+    }
+
+    // Initialize on first load
+    initSidebar();
+
+    // Re-initialize after View Transitions navigation
+    document.addEventListener("astro:after-swap", initSidebar);
+  </script>
+</BaseLayout>

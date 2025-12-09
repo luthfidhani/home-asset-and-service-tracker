@@ -1,0 +1,238 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import StatCard from '../components/ui/StatCard.astro';
+import Card from '../components/ui/Card.astro';
+import Badge from '../components/ui/Badge.astro';
+import Button from '../components/ui/Button.astro';
+import Table from '../components/ui/Table.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import { supabase } from '../lib/supabase';
+import { formatCurrency, formatDate, getStatusColor, getWarrantyStatus } from '../lib/utils';
+import type { Asset, Service, Warranty } from '../lib/database.types';
+
+// Run ALL queries in parallel for faster loading
+const [
+  assetsResult,
+  servicesResult,
+  warrantiesResult,
+  recentAssetsResult,
+  recentServicesResult,
+  expiringWarrantiesResult,
+] = await Promise.all([
+  // All assets (for count and value calculation)
+  supabase.from('assets').select('purchase_price, status'),
+  
+  // All services (for total cost)
+  supabase.from('services').select('cost'),
+  
+  // Active warranties count
+  supabase.from('warranties')
+    .select('*', { count: 'exact', head: true })
+    .gte('warranty_end', new Date().toISOString().split('T')[0]),
+  
+  // Recent assets
+  supabase.from('assets')
+    .select('id, name, category, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(5),
+  
+  // Recent services
+  supabase.from('services')
+    .select('id, asset_id, service_date, cost, status, assets(name)')
+    .order('service_date', { ascending: false })
+    .limit(5),
+  
+  // Expiring warranties
+  supabase.from('warranties')
+    .select('id, asset_id, warranty_end, provider, assets(name)')
+    .gte('warranty_end', new Date().toISOString().split('T')[0])
+    .lte('warranty_end', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+    .order('warranty_end', { ascending: true })
+    .limit(5),
+]);
+
+// Process results
+const assets = assetsResult.data || [];
+const totalAssets = assets.length;
+const totalValue = assets
+  .filter(a => a.status === 'active')
+  .reduce((sum, a) => sum + (a.purchase_price || 0), 0);
+
+const totalService = (servicesResult.data || [])
+  .reduce((sum, s) => sum + (s.cost || 0), 0);
+
+const activeWarranties = warrantiesResult.count || 0;
+
+const recentAssets = recentAssetsResult.data as Asset[] | null;
+const recentServices = recentServicesResult.data as (Service & { assets: { name: string } | null })[] | null;
+const expiringWarranties = expiringWarrantiesResult.data as (Warranty & { assets: { name: string } | null })[] | null;
+---
+
+<AppLayout title="Dashboard">
+  <div class="space-y-8">
+    <!-- Header -->
+    <div>
+      <h1 class="text-2xl lg:text-3xl font-bold text-surface-900">Dashboard</h1>
+      <p class="mt-1 text-surface-500">Overview of your home assets and services</p>
+    </div>
+    
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      <StatCard
+        title="Total Assets"
+        value={totalAssets || 0}
+        icon="inventory"
+        color="primary"
+      />
+      <StatCard
+        title="Total Value"
+        value={formatCurrency(totalValue)}
+        subtitle="Active assets only"
+        icon="currency"
+        color="green"
+      />
+      <StatCard
+        title="Service Costs"
+        value={formatCurrency(totalService)}
+        subtitle="All time"
+        icon="service"
+        color="yellow"
+      />
+      <StatCard
+        title="Active Warranties"
+        value={activeWarranties || 0}
+        icon="warranty"
+        color="blue"
+      />
+    </div>
+    
+    <!-- Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Recently Added Assets -->
+      <Card padding="none" class="overflow-hidden">
+        <div class="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+          <h2 class="font-semibold text-surface-900">Recently Added Assets</h2>
+          <Button href="/assets" variant="ghost" size="sm">
+            View All
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </Button>
+        </div>
+        {recentAssets && recentAssets.length > 0 ? (
+          <div class="divide-y divide-surface-100">
+            {recentAssets.map((asset) => (
+              <a href={`/assets/${asset.id}`} class="flex items-center gap-4 px-6 py-4 hover:bg-surface-50 transition-colors" data-astro-prefetch>
+                <div class="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-surface-900 truncate">{asset.name}</p>
+                  <p class="text-sm text-surface-500">{asset.category}</p>
+                </div>
+                <Badge class={getStatusColor(asset.status)}>
+                  {asset.status}
+                </Badge>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No assets yet"
+            description="Start by adding your first asset"
+            icon="assets"
+          >
+            <Button href="/assets/new" size="sm">Add Asset</Button>
+          </EmptyState>
+        )}
+      </Card>
+      
+      <!-- Recent Services -->
+      <Card padding="none" class="overflow-hidden">
+        <div class="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+          <h2 class="font-semibold text-surface-900">Recent Services</h2>
+          <Button href="/services" variant="ghost" size="sm">
+            View All
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </Button>
+        </div>
+        {recentServices && recentServices.length > 0 ? (
+          <div class="divide-y divide-surface-100">
+            {recentServices.map((service) => (
+              <div class="flex items-center gap-4 px-6 py-4">
+                <div class="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium text-surface-900 truncate">{service.assets?.name || 'Unknown Asset'}</p>
+                  <p class="text-sm text-surface-500">{formatDate(service.service_date)} • {formatCurrency(service.cost)}</p>
+                </div>
+                <Badge variant={service.status === 'completed' ? 'success' : 'warning'}>
+                  {service.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No services yet"
+            description="Service records will appear here"
+            icon="services"
+          />
+        )}
+      </Card>
+    </div>
+    
+    <!-- Expiring Warranties -->
+    {expiringWarranties && expiringWarranties.length > 0 && (
+      <Card padding="none" class="overflow-hidden">
+        <div class="px-6 py-4 border-b border-surface-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            <h2 class="font-semibold text-surface-900">Warranties Expiring Soon</h2>
+          </div>
+          <Button href="/warranties" variant="ghost" size="sm">
+            View All
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </Button>
+        </div>
+        <Table>
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Provider</th>
+              <th>Expires</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expiringWarranties.map((warranty) => {
+              const status = getWarrantyStatus(warranty.warranty_end);
+              return (
+                <tr>
+                  <td class="font-medium">{warranty.assets?.name || 'Unknown'}</td>
+                  <td>{warranty.provider || '-'}</td>
+                  <td>{formatDate(warranty.warranty_end)}</td>
+                  <td>
+                    <Badge class={status.class}>{status.label}</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </Card>
+    )}
+  </div>
+</AppLayout>

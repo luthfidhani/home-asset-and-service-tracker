@@ -1,0 +1,182 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import PageHeader from '../../components/ui/PageHeader.astro';
+import Button from '../../components/ui/Button.astro';
+import Card from '../../components/ui/Card.astro';
+import Table from '../../components/ui/Table.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Select from '../../components/ui/Select.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import StatCard from '../../components/ui/StatCard.astro';
+import { supabase } from '../../lib/supabase';
+import { formatDate, getWarrantyStatus, daysUntilExpiry } from '../../lib/utils';
+
+// Get filter
+const statusFilter = Astro.url.searchParams.get('status') || '';
+const today = new Date().toISOString().split('T')[0];
+
+// Fetch warranties with asset info
+let query = supabase.from('warranties').select('*, assets(id, name, category)').order('warranty_end', { ascending: true });
+
+if (statusFilter === 'active') {
+  query = query.gte('warranty_end', today);
+} else if (statusFilter === 'expired') {
+  query = query.lt('warranty_end', today);
+}
+
+const { data: warranties } = await query;
+
+// Calculate stats
+const activeCount = warranties?.filter(w => daysUntilExpiry(w.warranty_end) >= 0).length || 0;
+const expiredCount = warranties?.filter(w => daysUntilExpiry(w.warranty_end) < 0).length || 0;
+const expiringSoonCount = warranties?.filter(w => {
+  const days = daysUntilExpiry(w.warranty_end);
+  return days >= 0 && days <= 30;
+}).length || 0;
+
+const statusOptions = [
+  { value: 'active', label: 'Active' },
+  { value: 'expired', label: 'Expired' },
+];
+---
+
+<AppLayout title="Warranties">
+  <PageHeader title="Warranties" description="Track warranty status for your assets">
+    <Button href="/warranties/new" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+      </svg>
+      Add Warranty
+    </Button>
+  </PageHeader>
+  
+  <!-- Stats -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <StatCard
+      title="Active Warranties"
+      value={activeCount}
+      icon="warranty"
+      color="green"
+    />
+    <StatCard
+      title="Expiring Soon"
+      value={expiringSoonCount}
+      subtitle="Within 30 days"
+      icon="warranty"
+      color="yellow"
+    />
+    <StatCard
+      title="Expired"
+      value={expiredCount}
+      icon="warranty"
+      color="red"
+    />
+  </div>
+  
+  <!-- Filter -->
+  <Card class="mb-6">
+    <form method="GET" class="flex flex-col sm:flex-row gap-4">
+      <div class="w-full sm:w-48">
+        <Select
+          name="status"
+          options={statusOptions}
+          value={statusFilter}
+          placeholder="All Warranties"
+        />
+      </div>
+      <Button type="submit" variant="secondary">
+        Filter
+      </Button>
+      {statusFilter && (
+        <Button href="/warranties" variant="ghost">
+          Clear
+        </Button>
+      )}
+    </form>
+  </Card>
+  
+  <!-- Warranties Table -->
+  {warranties && warranties.length > 0 ? (
+    <Card padding="none">
+      <Table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th class="hidden sm:table-cell">Category</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th class="hidden md:table-cell">Provider</th>
+            <th>Status</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {warranties.map((warranty) => {
+            const status = getWarrantyStatus(warranty.warranty_end);
+            const days = daysUntilExpiry(warranty.warranty_end);
+            return (
+              <tr>
+                <td>
+                  <a href={`/assets/${warranty.asset_id}`} class="font-medium text-primary-600 hover:text-primary-700" data-astro-prefetch>
+                    {warranty.assets?.name || 'Unknown'}
+                  </a>
+                </td>
+                <td class="hidden sm:table-cell">{warranty.assets?.category || '-'}</td>
+                <td>{formatDate(warranty.warranty_start)}</td>
+                <td>
+                  <div>
+                    {formatDate(warranty.warranty_end)}
+                    {days >= 0 && days <= 30 && (
+                      <p class="text-xs text-yellow-600">{days} days left</p>
+                    )}
+                  </div>
+                </td>
+                <td class="hidden md:table-cell">{warranty.provider || '-'}</td>
+                <td>
+                  <Badge class={status.class}>{status.label}</Badge>
+                </td>
+                <td class="text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <a
+                      href={`/warranties/${warranty.id}/edit`}
+                      class="p-2 text-surface-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit"
+                      data-astro-prefetch
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      </svg>
+                    </a>
+                    <form action="/api/warranties/delete" method="POST" class="inline" onsubmit="return confirm('Delete this warranty?')">
+                      <input type="hidden" name="id" value={warranty.id} />
+                      <button
+                        type="submit"
+                        class="p-2 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+    </Card>
+  ) : (
+    <Card>
+      <EmptyState
+        title="No warranties found"
+        description={statusFilter ? "Try adjusting your filter" : "Add warranty information for your assets"}
+        icon="warranties"
+      >
+        <Button href="/warranties/new">Add Warranty</Button>
+      </EmptyState>
+    </Card>
+  )}
+</AppLayout>
+

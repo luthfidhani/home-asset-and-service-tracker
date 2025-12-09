@@ -1,0 +1,78 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Button from '../components/ui/Button.astro';
+import Input from '../components/ui/Input.astro';
+import Alert from '../components/ui/Alert.astro';
+import { getSession } from '../lib/auth';
+
+// Redirect if already logged in
+const session = await getSession(Astro.cookies);
+if (session) {
+  return Astro.redirect('/');
+}
+
+const error = Astro.url.searchParams.get('error');
+---
+
+<BaseLayout title="Login">
+  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-surface-100 via-surface-50 to-primary-50 px-4">
+    <!-- Background pattern -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute -top-1/2 -right-1/2 w-full h-full bg-gradient-to-bl from-primary-200/30 to-transparent rounded-full blur-3xl"></div>
+      <div class="absolute -bottom-1/2 -left-1/2 w-full h-full bg-gradient-to-tr from-primary-100/20 to-transparent rounded-full blur-3xl"></div>
+    </div>
+    
+    <div class="relative w-full max-w-md">
+      <!-- Logo -->
+      <div class="text-center mb-8 animate-fade-in">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-500/30 mb-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-surface-900">Asset Tracker</h1>
+        <p class="text-surface-500 mt-1">Sign in to manage your home assets</p>
+      </div>
+      
+      <!-- Login card -->
+      <div class="bg-white rounded-2xl shadow-xl shadow-surface-200/50 p-8 animate-slide-up" style="animation-delay: 100ms;">
+        {error && (
+          <Alert type="error" class="mb-6" dismissible>
+            {error === 'invalid_credentials' ? 'Invalid email or password' : 'An error occurred. Please try again.'}
+          </Alert>
+        )}
+        
+        <form action="/api/auth/login" method="POST" class="space-y-5">
+          <Input
+            type="email"
+            name="email"
+            label="Email Address"
+            placeholder="you@example.com"
+            required
+          />
+          
+          <Input
+            type="password"
+            name="password"
+            label="Password"
+            placeholder="••••••••"
+            required
+          />
+          
+          <Button type="submit" variant="primary" size="lg" class="w-full">
+            Sign In
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+            </svg>
+          </Button>
+        </form>
+      </div>
+      
+      <!-- Footer -->
+      <p class="text-center text-sm text-surface-400 mt-6 animate-fade-in" style="animation-delay: 200ms;">
+        Personal Home Asset Management System
+      </p>
+    </div>
+  </div>
+</BaseLayout>
+

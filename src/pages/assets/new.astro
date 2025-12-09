@@ -1,0 +1,136 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import PageHeader from '../../components/ui/PageHeader.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
+import Select from '../../components/ui/Select.astro';
+import Textarea from '../../components/ui/Textarea.astro';
+import FileUploadWithCompression from '../../components/ui/FileUploadWithCompression.astro';
+import Alert from '../../components/ui/Alert.astro';
+import { ASSET_CATEGORIES, ASSET_CONDITIONS, ASSET_STATUSES } from '../../lib/utils';
+
+const error = Astro.url.searchParams.get('error');
+
+const categoryOptions = ASSET_CATEGORIES.map(c => ({ value: c, label: c }));
+const conditionOptions = ASSET_CONDITIONS.map(c => ({ value: c.value, label: c.label }));
+const statusOptions = ASSET_STATUSES.map(s => ({ value: s.value, label: s.label }));
+---
+
+<AppLayout title="Add New Asset">
+  <PageHeader title="Add New Asset" description="Create a new asset record">
+    <Button href="/assets" variant="ghost" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Back to Assets
+    </Button>
+  </PageHeader>
+  
+  {error && (
+    <Alert type="error" class="mb-6" dismissible>
+      {error === 'validation' ? 'Please fill in all required fields' : 'An error occurred. Please try again.'}
+    </Alert>
+  )}
+  
+  <Card>
+    <form action="/api/assets/create" method="POST" enctype="multipart/form-data" class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Input
+          name="name"
+          label="Asset Name"
+          placeholder="e.g., MacBook Pro 14"
+          required
+        />
+        
+        <Select
+          name="category"
+          label="Category"
+          options={categoryOptions}
+          placeholder="Select category"
+          required
+        />
+        
+        <Input
+          name="brand"
+          label="Brand"
+          placeholder="e.g., Apple"
+        />
+        
+        <Input
+          name="model"
+          label="Model"
+          placeholder="e.g., M3 Pro"
+        />
+        
+        <Input
+          name="serial_number"
+          label="Serial Number"
+          placeholder="e.g., C02XG8FHJGH5"
+        />
+        
+        <Input
+          name="location"
+          label="Location"
+          placeholder="e.g., Home Office"
+        />
+        
+        <Input
+          type="date"
+          name="purchase_date"
+          label="Purchase Date"
+        />
+        
+        <Input
+          type="number"
+          name="purchase_price"
+          label="Purchase Price (Rp)"
+          placeholder="0"
+          min="0"
+          step="1"
+        />
+        
+        <Select
+          name="condition"
+          label="Condition"
+          options={conditionOptions}
+          value="good"
+        />
+        
+        <Select
+          name="status"
+          label="Status"
+          options={statusOptions}
+          value="active"
+        />
+      </div>
+      
+      <Textarea
+        name="notes"
+        label="Notes"
+        placeholder="Additional notes about this asset..."
+        rows={3}
+      />
+      
+      <FileUploadWithCompression
+        name="images"
+        label="Asset Images (auto-compressed)"
+        accept="image/*"
+        multiple
+        maxWidth={1920}
+        maxHeight={1920}
+        quality={0.85}
+      />
+      
+      <div class="flex items-center justify-end gap-4 pt-4 border-t border-surface-200">
+        <Button href="/assets" variant="ghost">Cancel</Button>
+        <Button type="submit">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Create Asset
+        </Button>
+      </div>
+    </form>
+  </Card>
+</AppLayout>

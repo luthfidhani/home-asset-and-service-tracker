@@ -1,0 +1,32 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className = '' } = Astro.props;
+---
+
+<div class={`overflow-x-auto rounded-xl border border-surface-200 ${className}`}>
+  <table class="w-full text-sm">
+    <slot />
+  </table>
+</div>
+
+<style>
+  table :global(thead) {
+    @apply bg-surface-50 border-b border-surface-200;
+  }
+  
+  table :global(th) {
+    @apply px-4 py-3 text-left text-xs font-semibold text-surface-600 uppercase tracking-wider;
+  }
+  
+  table :global(tbody tr) {
+    @apply border-b border-surface-100 last:border-0 hover:bg-surface-50 transition-colors;
+  }
+  
+  table :global(td) {
+    @apply px-4 py-3 text-surface-700;
+  }
+</style>
+

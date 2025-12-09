@@ -1,0 +1,110 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import PageHeader from '../../../components/ui/PageHeader.astro';
+import Card from '../../../components/ui/Card.astro';
+import Button from '../../../components/ui/Button.astro';
+import Input from '../../../components/ui/Input.astro';
+import Textarea from '../../../components/ui/Textarea.astro';
+import Alert from '../../../components/ui/Alert.astro';
+import { supabase } from '../../../lib/supabase';
+import { formatDateForInput } from '../../../lib/utils';
+
+const { id } = Astro.params;
+const error = Astro.url.searchParams.get('error');
+
+const { data: warranty } = await supabase
+  .from('warranties')
+  .select('*, assets(name)')
+  .eq('id', id)
+  .single();
+
+if (!warranty) {
+  return Astro.redirect('/warranties?error=not_found');
+}
+---
+
+<AppLayout title="Edit Warranty">
+  <PageHeader title="Edit Warranty" description={warranty.assets?.name || 'Unknown Asset'}>
+    <Button href="/warranties" variant="ghost" slot="actions">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Back to Warranties
+    </Button>
+  </PageHeader>
+  
+  {error && (
+    <Alert type="error" class="mb-6" dismissible>
+      {error === 'validation' ? 'Please fill in all required fields' : 'An error occurred. Please try again.'}
+    </Alert>
+  )}
+  
+  <Card>
+    <form action="/api/warranties/update" method="POST" class="space-y-6">
+      <input type="hidden" name="id" value={warranty.id} />
+      <input type="hidden" name="asset_id" value={warranty.asset_id} />
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-surface-700 mb-1.5">Asset</label>
+          <p class="px-4 py-2.5 rounded-lg border border-surface-200 bg-surface-50 text-surface-700">
+            {warranty.assets?.name || 'Unknown'}
+          </p>
+        </div>
+        
+        <Input
+          name="provider"
+          label="Warranty Provider"
+          placeholder="e.g., Apple, Best Buy, Manufacturer"
+          value={warranty.provider || ''}
+        />
+        
+        <Input
+          type="date"
+          name="warranty_start"
+          label="Warranty Start Date"
+          value={formatDateForInput(warranty.warranty_start)}
+          required
+        />
+        
+        <Input
+          type="date"
+          name="warranty_end"
+          label="Warranty End Date"
+          value={formatDateForInput(warranty.warranty_end)}
+          required
+        />
+      </div>
+      
+      <Textarea
+        name="notes"
+        label="Notes"
+        placeholder="Additional warranty details, terms, or conditions..."
+        value={warranty.notes || ''}
+        rows={3}
+      />
+      
+      <div class="flex items-center justify-between pt-4 border-t border-surface-200">
+        <form action="/api/warranties/delete" method="POST" onsubmit="return confirm('Delete this warranty?')">
+          <input type="hidden" name="id" value={warranty.id} />
+          <Button type="submit" variant="danger">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Delete
+          </Button>
+        </form>
+        <div class="flex items-center gap-4">
+          <Button href="/warranties" variant="ghost">Cancel</Button>
+          <Button type="submit">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            Save Changes
+          </Button>
+        </div>
+      </div>
+    </form>
+  </Card>
+</AppLayout>
+
