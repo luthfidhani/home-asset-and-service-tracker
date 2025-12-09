@@ -4,7 +4,10 @@ import vercel from '@astrojs/vercel/serverless';
 
 export default defineConfig({
   output: 'server',
-  adapter: vercel(),
+  adapter: vercel({
+    // Use Node.js 20 runtime
+    runtime: 'nodejs20.x',
+  }),
   integrations: [tailwind()],
   security: {
     checkOrigin: true
@@ -12,6 +15,6 @@ export default defineConfig({
   // Enable View Transitions for SPA-like navigation
   prefetch: {
     prefetchAll: true,
-    defaultStrategy: 'hover' // Prefetch on hover for faster perceived navigation
+    defaultStrategy: 'hover'
   }
 });
